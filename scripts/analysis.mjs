@@ -31,7 +31,8 @@ function fisher(a, b, c, d) {
   for (let x = Math.max(0, c1 - (n - r1)); x <= Math.min(r1, c1); x++) { const q = p(x); if (q <= p0 * 1.0000001) s += q; }
   return Math.min(1, s);
 }
-const median = v => { v = [...v].sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+const median = v => { v = [...v].sort((a, b) => a - b); const h = v.length >> 1; return !v.length ? null : v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2; };
+const mean = v => (v.length ? v.reduce((s, x) => s + x, 0) / v.length : null);
 function compare(rows, key, kind) {
   const a = rows.filter(r => r.y === 1 && r[key] != null && isFinite(r[key])).map(r => r[key]);
   const b = rows.filter(r => r.y === 0 && r[key] != null && isFinite(r[key])).map(r => r[key]);
@@ -46,7 +47,7 @@ function compare(rows, key, kind) {
   const Ra = all.reduce((s, x, i) => s + (x[1] ? rk[i] : 0), 0);
   const U = Ra - a.length * (a.length + 1) / 2;
   const mu = a.length * b.length / 2, sd = Math.sqrt(a.length * b.length * (a.length + b.length + 1) / 12);
-  return { rec: median(a), fail: median(b), auc: U / (a.length * b.length), nRec: a.length, nFail: b.length, p: pNorm((U - mu) / sd) };
+  return { rec: median(a), fail: median(b), recMean: mean(a), failMean: mean(b), auc: U / (a.length * b.length), nRec: a.length, nFail: b.length, p: pNorm((U - mu) / sd) };
 }
 
 // [키, 이름, 종류, 단위, 그룹]
