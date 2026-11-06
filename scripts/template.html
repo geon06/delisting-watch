@@ -132,6 +132,10 @@ table.vt{min-width:560px}
 .mbar .lb{font-size:11px;color:var(--muted);font-family:var(--f-num)}
 .mbar .nn{font-size:11px;font-family:var(--f-num)}
 .sub3{font-size:14px;margin:16px 0 6px}
+.dl{display:flex;flex-direction:column;gap:1px;cursor:help;min-width:92px}
+.dl b{font-family:var(--f-num);font-size:13.5px}
+.dl b.crit{color:var(--crit)}.dl b.warn{color:var(--warn)}.dl b.ok{color:var(--accent)}
+.dl span{font-size:11.5px;color:var(--muted);white-space:nowrap}
 .sig{display:flex;align-items:center;gap:6px;cursor:help}
 .sig b{font-family:var(--f-num);font-size:13px;min-width:1.4em;text-align:center;border-radius:4px;padding:1px 4px;background:var(--bg);border:1px solid var(--line)}
 .sig b.hi{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -218,6 +222,7 @@ table.vt{min-width:560px}
       <select id="sort" aria-label="정렬">
         <option value="gap">기준까지 필요한 상승률 큰 순</option>
         <option value="sig">회복 신호 높은 순</option>
+        <option value="dl">기한 임박 순</option>
         <option value="mc">시총 작은 순</option>
         <option value="rv">매출 큰 순</option>
         <option value="ps">시총/매출(PSR) 낮은 순</option>
@@ -252,6 +257,7 @@ table.vt{min-width:560px}
       <li>시총 기준은 2026년 7월부터 코스피 300억, 코스닥 200억이고, 2027년 1월부터 코스피 500억, 코스닥 300억입니다. 매출 기준은 2027년부터 단계적으로 오릅니다.</li>
       <li>매출액은 가장 최근 확정 연간 실적(대부분 연결 기준)입니다. 거래소 규정상 매출액과 세부 기준이 달라 실제 판정과 다를 수 있습니다.</li>
       <li>실제 규정은 시총 미달이 <b>30거래일 연속</b>일 때 관리종목으로 지정하고, 지정 후 90거래일 동안 기준 이상인 상태가 45거래일 이어지지 못하면 상장폐지합니다. 이 표는 하루치 시총만 비교합니다.</li>
+      <li><b>남은 기간</b>: 관리종목이 아닌 종목은 시총이 기준 아래인 날이 30거래일 연속되면 관리종목으로 지정되므로, 30일째가 되는 날까지 남은 거래일입니다(코스닥은 25일째 경고 공시 날짜로 정확히 계산하고, 그 외는 종가 × 현재 주식수로 추정). 시총 미달 관리종목은 지정 후 90거래일 안에 기준 이상 45거래일 연속이어야 해제되므로, 늦어도 45거래일째까지 기준 위로 올라가야 하는 날입니다. 앞으로의 날짜는 휴장일을 반영한 추정이라 하루 이틀 다를 수 있습니다. 코스피는 2026년 10월 가처분 결정 이후 지정 종목의 후속 상장폐지 절차가 유예된 상태입니다.</li>
       <li><b>회복 신호</b>: '회복 요인' 탭에서 회복과 뚜렷하게 연관된 조건 5개(최근 25거래일 주가·지수 대비 초과수익·거래대금, 최근 60일 제3자배정 증자·최대주주 변경 공시) 중 몇 개를 만족하는지입니다. 기준선은 과거 실패군 중앙값이고 매일 다시 계산합니다. 점에 마우스를 올리면 조건별 결과와 과거 같은 점수의 회복률이 나옵니다. ★는 과거 회복률이 가장 높았던 조합입니다. 기준은 코스닥 경고 사례로 만든 것이라 코스피는 참고용입니다.</li>
       <li>"현행 미달"은 지금 시행 중인 기준에도 시총이 못 미친다는 뜻입니다. 우선주, ETF, 펀드형 종목은 뺐습니다.</li>
       <li>투자 판단 자료가 아니라 기준 대비 위치를 훑어보는 용도입니다.</li>
@@ -321,6 +327,24 @@ function searchFilter(list){const q=S.q.trim().toLowerCase();return q?list.filte
 /* ---------- 현재 시총 미달 ---------- */
 let SG=null;
 const SIGL=()=>SG?[`최근 25거래일 주가가 ${pctf(SG.cuts.pre)}보다 덜 하락`,`지수 대비 초과수익이 ${pctf(SG.cuts.ex)}보다 덜 하락`,`일평균 거래대금 ${fmt(SG.cuts.to,1)}억 미만`,'최근 60일 제3자배정 유상증자 공시','최근 60일 최대주주·경영권 변경 공시']:[];
+function dlHtml(r){
+  const d=r.sig?.dl;if(!d)return '<span class="lbl">–</span>';
+  const md=s=>s?s.slice(5).replace('-','.'):'';
+  const cls=n=>n<=5?'crit':n<=10?'warn':'';
+  const NL=String.fromCharCode(10);
+  if(r.st)return '<div class="dl" title="거래정지 중에는 기한 계산을 하지 않습니다."><b>거래정지</b><span>기한 계산 제외</span></div>';
+  if(d.mode==='N'){
+    if(d.state==='mismatch')return `<div class="dl" title="${esc('추정상 '+d.run+'거래일 연속 미달이지만 경고·지정 공시가 없습니다.'+NL+'리츠 등 규정이 다른 종목이거나, 증자 등으로 주식수가 바뀌어 추정이 틀렸을 수 있습니다.')}"><b>확인 필요</b><span>공시와 추정 불일치</span></div>`;
+    if(d.state==='above')return '<div class="dl" title="지금은 현행 기준 이상입니다. 기준 아래로 내려가면 그날부터 30거래일을 셉니다."><b class="ok">기준 이상</b><span>현행 기준 충족</span></div>';
+    const how=d.exact?'코스닥 경고 공시일을 25일째로 계산':'종가 × 현재 주식수로 추정';
+    const tip=`기준 아래 ${d.run}거래일 연속 → 30거래일이면 관리종목 지정${NL}${md(d.date)}까지 기준 위로 올라가지 못하면 지정${NL}${how}`;
+    return `<div class="dl" title="${esc(tip)}"><b class="${cls(d.left)}">D-${d.left}${d.exact?'':' <small>추정</small>'}</b><span>${md(d.date)} 지정 예상</span><span>연속 ${d.run}일 미달</span></div>`;
+  }
+  const base=`관리종목 지정일 ${md(d.since)}부터 90거래일(${md(d.end)}까지) 안에 기준 이상 45거래일 연속이면 해제`;
+  if(d.state==='recovering')return `<div class="dl" title="${esc(base+NL+'지금 '+d.run+'거래일째 기준 이상')}"><b class="ok">${d.run}/45일</b><span>${md(d.date)} 해제 예상</span><span>관리종목 · 회복 중</span></div>`;
+  if(d.state==='passed')return `<div class="dl" title="${esc(base+NL+'45일 연속을 채울 수 있는 기한이 지났습니다')}"><b class="crit">기한 지남</b><span>해제 불가 (${md(d.end)})</span><span>관리종목</span></div>`;
+  return `<div class="dl" title="${esc(base+NL+md(d.date)+'까지 기준 위로 올라가 45일을 버텨야 합니다')}"><b class="${cls(d.left)}">D-${d.left}</b><span>${md(d.date)}까지 반등</span><span>관리종목 · 해제 마감</span></div>`;
+}
 function sigHtml(r){
   const s=r.sig;if(!s)return '<span class="lbl">–</span>';
   const L=SIGL();const h=SG.hist.find(x=>x.k===s.score);
@@ -337,11 +361,12 @@ function rowHtml(r){const st=STAGES[S.st],lim=st.mc[r.m],cur=STAGES[CUR].mc[r.m]
   const tags=(crit?'<span class="pill crit">현행 미달</span>':'')+(r.st?'<span class="pill warn">거래정지</span>':'')+(r.loss3?'<span class="pill mute">3년 영업적자</span>':'')+(r.sp?'<span class="pill mute">스팩</span>':'');
   return `<tr>
   <td class="nm"><a href="https://finance.naver.com/item/main.naver?code=${r.c}" target="_blank" rel="noopener">${esc(r.n)}</a>${tags}<span class="sub"><span class="mono">${r.c}</span> · ${esc(r.sec)}</span></td>
+  <td>${dlHtml(r)}</td>
+  <td>${sigHtml(r)}</td>
   <td class="r">${fmt(r.p)}</td>
   <td class="r ${r.ch>0?'up':r.ch<0?'down':''}">${r.ch>0?'+':''}${fmt(r.ch,2)}%</td>
   <td class="r">${fmt(r.mc,1)}억</td>
   <td><div class="gauge"><span class="g" title="기준 ${lim}억 대비 ${fmt(ratio*100)}%"><i class="${crit?'crit':''}" style="width:${Math.min(100,ratio*100)}%"></i></span><span class="need">+${fmt(need)}%</span></div></td>
-  <td>${sigHtml(r)}</td>
   <td class="r">${eok(r.R)} <span class="lbl">${r.RY||''}</span></td>
   <td>${spark(r.rv)}</td>
   <td class="r ${op<0?'neg':''}">${eok(op)}</td>
@@ -351,7 +376,8 @@ function rowHtml(r){const st=STAGES[S.st],lim=st.mc[r.m],cur=STAGES[CUR].mc[r.m]
   <td class="r">${r.db==null?'–':fmt(r.db)+'%'}</td>
   <td>${pos==null?'–':`<span class="pos" title="52주 최저 ${fmt(r.lo)} · 최고 ${fmt(r.hi)}"><i style="left:calc(${pos*100}% - 1.5px)"></i></span>`}</td>
   </tr>`}
-const SORTS={sig:(a,b)=>((b.sig?.score??-1)-(a.sig?.score??-1))||((b.sig?.star||0)-(a.sig?.star||0))||(b.mc-a.mc),gap:(a,b)=>a.mc-b.mc,mc:(a,b)=>a.mc-b.mc,rv:(a,b)=>b.R-a.R,ps:(a,b)=>(a.ps??1e9)-(b.ps??1e9),ch:(a,b)=>b.ch-a.ch,n:(a,b)=>a.n.localeCompare(b.n,'ko')};
+const dlKey=r=>{const d=r.sig?.dl;if(!d||r.st)return 9999;if(d.state==='mismatch')return 8000;if(d.state==='passed')return -1;if(d.state==='above')return 9000;if(d.state==='recovering')return 500+d.left;return d.left};
+const SORTS={dl:(a,b)=>dlKey(a)-dlKey(b)||a.mc-b.mc,sig:(a,b)=>((b.sig?.score??-1)-(a.sig?.score??-1))||((b.sig?.star||0)-(a.sig?.star||0))||(b.mc-a.mc),gap:(a,b)=>a.mc-b.mc,mc:(a,b)=>a.mc-b.mc,rv:(a,b)=>b.R-a.R,ps:(a,b)=>(a.ps??1e9)-(b.ps??1e9),ch:(a,b)=>b.ch-a.ch,n:(a,b)=>a.n.localeCompare(b.n,'ko')};
 function renderNow(){
   const st=STAGES[S.st];
   if(SG)rows.forEach(r=>r.sig=SG.s[r.c]);
@@ -373,8 +399,8 @@ function renderNow(){
     const subs=[...new Set(g.map(r=>r.sec))];const sm=g.reduce((a,r)=>a+r.mc,0);
     return `<details class="sec" open><summary><h2>${b}</h2><span class="meta"><span class="mono">${g.length}</span>개 종목 · 세부업종 ${subs.length}개 · 시총 합계 <span class="mono">${fmt(sm)}</span>억</span><span class="caret">▶</span></summary>
     <div class="tbl"><table><thead><tr>
-      <th data-k="n">종목</th><th class="r">현재가</th><th class="r" data-k="ch">등락률</th><th class="r" data-k="mc">시가총액</th>
-      <th class="r" data-k="gap">기준 대비 · 필요 상승률</th><th data-k="sig" title="회복 요인 탭에서 뚜렷했던 조건 5개 중 몇 개를 만족하는지">회복 신호</th><th class="r" data-k="rv">최근 매출</th><th>매출 3년</th>
+      <th data-k="n">종목</th><th data-k="dl" title="관리종목 지정 또는 해제 기한까지 남은 거래일">남은 기간</th><th data-k="sig" title="회복 요인 탭에서 뚜렷했던 조건 5개 중 몇 개를 만족하는지">회복 신호</th><th class="r">현재가</th><th class="r" data-k="ch">등락률</th><th class="r" data-k="mc">시가총액</th>
+      <th class="r" data-k="gap">기준 대비 · 필요 상승률</th><th class="r" data-k="rv">최근 매출</th><th>매출 3년</th>
       <th class="r">영업이익</th><th class="r">순이익</th><th class="r" data-k="ps">PSR</th><th class="r">PBR</th><th class="r">부채비율</th><th>52주 위치</th>
     </tr></thead><tbody>${g.map(rowHtml).join('')}</tbody></table></div></details>`}).join('');
   document.querySelectorAll(`th[data-k="${S.sort}"]`).forEach(th=>th.insertAdjacentHTML('beforeend','<span class="ar">▼</span>'));
@@ -544,6 +570,7 @@ function renderFac(){
   ]);
   const sig=A.vars.filter(v=>v.p<0.05),weak=A.vars.filter(v=>v.p>=0.05&&v.p<0.1),none=A.vars.filter(v=>v.p>=0.1);
   const fin=none.filter(v=>v.group==='재무').map(v=>v.label.replace('직전 연도 ',''));
+  const gm=none.filter(v=>v.group==='주주총회');
   const mk=A.market.filter(b=>b.n);
   const mx=Math.max(...A.byMonth.map(m=>m.n),1);
   const months=A.byMonth.map(m=>{const h=120*m.n/mx;return `<div class="col"><span class="nn">${m.rec}/${m.n}</span><div class="stack" style="height:${h}px"><i style="height:${m.rec/m.n*100}%;background:var(--accent)"></i><i style="height:${(m.n-m.rec)/m.n*100}%;background:var(--crit)"></i></div><span class="lb">${m.m.slice(2).replace('-','.')}</span></div>`}).join('');
@@ -561,6 +588,7 @@ function renderFac(){
       ${sig.length?sig.map(v=>`<li>${findLine(v)}</li>`).join(''):'<li>아직 통계적으로 뚜렷한 차이를 보인 변수가 없습니다.</li>'}
       ${weak.map(v=>`<li class="note">약한 신호 · ${findLine(v)}</li>`).join('')}
       ${fin.length?`<li>재무 변수 중 <b>${fin.join(', ')}</b>는 회복 여부와 뚜렷한 관계가 없었습니다.</li>`:''}
+      ${gm.length?`<li>주주총회 공시(${gm.map(v=>`${v.label.replace(' 공시','')} 회복 ${fmt(v.rec*100)}% · 실패 ${fmt(v.fail*100)}%`).join(' / ')})도 회복 여부와 뚜렷한 관계가 없었습니다. 주총 자체보다 그 안건(증자·최대주주 변경)이 중요한 것으로 보입니다.</li>`:''}
     </ul>
   </section>
   <div class="two">

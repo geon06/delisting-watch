@@ -162,7 +162,7 @@ async function main() {
   const sigOut = path.join(ROOT, 'public', 'signals.json');
   try {
     const an = JSON.parse(fs.readFileSync(anOut, 'utf8'));
-    const sig = await buildSignals({ rows: rows.map(r => ({ c: r.c, n: r.n, m: r.m })), combos: an.combos });
+    const sig = await buildSignals({ root: ROOT, rows: rows.map(r => ({ c: r.c, n: r.n, m: r.m, mc: r.mc, p: r.p })), combos: an.combos });
     fs.writeFileSync(sigOut, JSON.stringify(sig));
     console.log('회복 신호', Object.keys(sig.s).length, '종목, 공시', sig.discOk ? '확인' : '실패');
   } catch (e) {

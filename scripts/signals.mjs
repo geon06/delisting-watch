@@ -2,7 +2,8 @@
 // 1) 최근 25거래일 주가가 실패군 중앙값보다 덜 하락  2) 같은 기간 지수 대비 초과수익이 실패군 중앙값보다 덜 하락
 // 3) 최근 25거래일 일평균 거래대금이 실패군 중앙값 미만  4) 최근 60일 제3자배정 유상증자 공시  5) 최근 60일 최대주주·경영권 변경 공시
 // 공시는 종목별이 아니라 공시 이름으로 시장 전체를 검색해 KIND 요청 수를 줄인다.
-import { kindApi, pool } from './history.mjs';
+import { kindApi, pool, loadCache } from './history.mjs';
+import { computeDeadline } from './deadline.mjs';
 import { MAJOR_RE } from './analysis.mjs';
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (delisting-watch)' };
@@ -25,10 +26,14 @@ const chartUrl = (kind, id, from) => `https://api.stock.naver.com/chart/domestic
  * @param {{c:string,n:string,m:number}[]} p.rows  현재 후보 종목
  * @param {object} p.combos  analysis.combos (기준선과 점수별 과거 회복률)
  */
-export async function buildSignals({ rows, combos }) {
+export async function buildSignals({ root, rows, combos }) {
   if (!combos) throw new Error('기준선(analysis.combos)이 없음');
   const T = today();
-  const from = addDays(T, -90);
+  const from = addDays(T, -200); // 관리종목 지정 후 기간까지 보려고 길게 받는다
+  const { c: cache } = loadCache(root);
+  const evByName = {};
+  for (const e of Object.values(cache.events)) (evByName[e.nm] ||= []).push({ d: e.d, t: e.t });
+  for (const a of Object.values(evByName)) a.sort((x, y) => (x.d < y.d ? -1 : 1));
   const idx = { 0: (await json(chartUrl('index', 'KOSPI', from))) || [], 1: (await json(chartUrl('index', 'KOSDAQ', from))) || [] };
 
   // 공시: 시장 전체 검색 (최근 60일)
@@ -77,6 +82,10 @@ export async function buildSignals({ rows, combos }) {
     o.ok = c.map(Number);
     o.score = c.filter(Boolean).length;
     o.star = c[0] && c[3] && (c[2] || c[4]) ? 1 : 0;
+    if (r.p > 0 && r.mc > 0) {
+      const series = ch.map(x => [`${x.localDate.slice(0, 4)}-${x.localDate.slice(4, 6)}-${x.localDate.slice(6, 8)}`, x.closePrice]);
+      o.dl = computeDeadline({ series, shares: r.mc * 1e8 / r.p, m: r.m, events: evByName[r.n] || [] });
+    }
     out[r.c] = o;
   });
 
